@@ -25,7 +25,7 @@
 			const hash = await createSecret(content, usePassword ? password : undefined);
 			link = secretUrl(hash);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Une erreur inattendue est survenue.';
+			error = e instanceof Error ? e.message : 'An unexpected error occurred.';
 		} finally {
 			loading = false;
 		}
@@ -38,7 +38,7 @@
 			copied = true;
 			setTimeout(() => (copied = false), 2000);
 		} catch {
-			error = 'Impossible de copier automatiquement, sélectionnez le lien manuellement.';
+			error = 'Unable to copy automatically, please select the link manually.';
 		}
 	}
 
@@ -56,9 +56,9 @@
 <main class="container py-5">
 	<div class="row justify-content-center">
 		<div class="col-12 col-lg-8">
-			<h1 class="mb-2">Partager un secret</h1>
+			<h1 class="mb-2">Share a secret</h1>
 			<p class="lead mb-4">
-				Le secret est chiffré côté serveur et détruit dès sa première lecture.
+				The secret is encrypted server-side and destroyed as soon as it is read.
 			</p>
 
 			{#if error}
@@ -68,10 +68,10 @@
 			{#if link}
 				<div class="card card-glow">
 					<div class="card-body">
-						<h2 class="card-title">Lien généré</h2>
+						<h2 class="card-title">Link to your secret</h2>
 						<p class="text-muted">
-							Ce lien ne fonctionne qu'une seule fois.
-							{#if usePassword}Transmettez le mot de passe par un autre canal.{/if}
+							This link will only work once.
+							{#if usePassword}Share the password through a different channel.{/if}
 						</p>
 						<div class="input-group mb-3">
 							<input
@@ -79,15 +79,15 @@
 								type="text"
 								readonly
 								value={link}
-								aria-label="Lien du secret"
+								aria-label="Link to the secret"
 								onfocus={(e) => e.currentTarget.select()}
 							/>
 							<button class="btn btn-primary" type="button" onclick={copy}>
-								{copied ? 'Copié !' : 'Copier'}
+								{copied ? 'Copied!' : 'Copy'}
 							</button>
 						</div>
 						<button class="btn btn-outline-secondary" type="button" onclick={reset}>
-							Créer un autre secret
+							Create another secret
 						</button>
 					</div>
 				</div>
@@ -100,7 +100,7 @@
 								id="content"
 								class="form-control form-control-mono"
 								rows="6"
-								placeholder="Mot de passe, token, clé d'API…"
+								placeholder="Password, token, API key…"
 								bind:value={content}
 								disabled={loading}
 								required
@@ -116,12 +116,12 @@
 								bind:checked={usePassword}
 								disabled={loading}
 							/>
-							<label for="use-password">Protéger par un mot de passe</label>
+							<label for="use-password">Protect with a password</label>
 						</div>
 
 						{#if usePassword}
 							<div class="mb-3">
-								<label class="form-label" for="password">Mot de passe</label>
+								<label class="form-label" for="password">Password</label>
 								<div class="input-group">
 									<input
 										id="password"
@@ -137,11 +137,11 @@
 										type="button"
 										onclick={() => (showPassword = !showPassword)}
 									>
-										{showPassword ? 'Masquer' : 'Afficher'}
+										{showPassword ? 'Hide' : 'Show'}
 									</button>
 								</div>
 								<div class="form-text">
-									Haché en SHA-256 dans votre navigateur avant l'envoi.
+									Password is hashed before being sent to the server.
 								</div>
 							</div>
 						{/if}
@@ -149,9 +149,9 @@
 						<button class="btn btn-primary btn-lg w-100" type="submit" disabled={!canSubmit}>
 							{#if loading}
 								<span class="spinner spinner-sm" aria-hidden="true"></span>
-								Création…
+								Creating…
 							{:else}
-								Générer le lien
+								Generate a link
 							{/if}
 						</button>
 					</div>

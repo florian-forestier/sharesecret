@@ -4,14 +4,14 @@
 	import { isProtected, readSecret, SecretNotFoundError } from '#lib';
 
 	type Status =
-		| 'checking' // appel à /api/is-protected en cours
-		| 'ready' // prêt à révéler (avec ou sans mot de passe)
-		| 'revealing' // appel à /api/secret en cours
+		| 'checking' // /api/is-protected call in progress
+		| 'ready' // ready to reveal (with or without password)
+		| 'revealing' // /api/secret call in progress
 		| 'revealed'
-		| 'gone' // inexistant ou déjà lu
+		| 'gone' // does not exist or already read
 		| 'error';
 
-	// La page est pré-rendue : le paramètre `hash` n'est lisible que côté navigateur.
+	// The page is prerendered: the `hash` parameter is only readable in the browser.
 	let hash = '';
 
 	let status = $state<Status>('checking');
@@ -33,7 +33,7 @@
 			needsPassword = await isProtected(hash);
 			status = 'ready';
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Une erreur inattendue est survenue.';
+			error = e instanceof Error ? e.message : 'An unexpected error occurred.';
 			status = 'error';
 		}
 	});
@@ -51,14 +51,14 @@
 		} catch (e) {
 			if (e instanceof SecretNotFoundError) {
 				if (needsPassword) {
-					// Le serveur répond 404 aussi pour un mauvais mot de passe.
-					passwordError = 'Mot de passe incorrect, ou le secret a déjà été lu.';
+					// The server also responds 404 for a wrong password.
+					passwordError = 'Incorrect password, or the secret has already been read.';
 					status = 'ready';
 				} else {
 					status = 'gone';
 				}
 			} else {
-				error = e instanceof Error ? e.message : 'Une erreur inattendue est survenue.';
+				error = e instanceof Error ? e.message : 'An unexpected error occurred.';
 				status = 'error';
 			}
 		}
@@ -70,42 +70,42 @@
 			copied = true;
 			setTimeout(() => (copied = false), 2000);
 		} catch {
-			error = 'Impossible de copier automatiquement, sélectionnez le texte manuellement.';
+			error = 'Unable to copy automatically, please select the text manually.';
 		}
 	}
 </script>
 
 <svelte:head>
-	<title>Secret partagé · Zecrets</title>
+	<title>Shared secret · ShareSecrets</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
 <main class="container py-5">
 	<div class="row justify-content-center">
 		<div class="col-12 col-lg-8">
-			<h1 class="mb-2">Secret partagé</h1>
-			<p class="lead mb-4">Ce secret ne peut être lu qu'une seule fois.</p>
+			<h1 class="mb-2">Shared secret</h1>
+			<p class="lead mb-4">This secret will be destroyed after you see it.</p>
 
 			{#if status === 'checking'}
 				<div class="d-flex align-items-center gap-2 text-muted">
 					<span class="spinner spinner-sm" aria-hidden="true"></span>
-					Vérification du secret…
+					Validating…
 				</div>
 			{:else if status === 'gone'}
 				<div class="alert alert-warning" role="alert">
-					<h2 class="alert-heading h5">Secret introuvable</h2>
-					<p class="mb-0">Ce lien est invalide, ou le secret a déjà été lu et détruit.</p>
+					<h2 class="alert-heading h5">Not found</h2>
+					<p class="mb-0">This link is invalid, or the secret has already been read and destroyed.</p>
 				</div>
-				<a class="btn btn-primary" href="/">Créer un nouveau secret</a>
+				<a class="btn btn-primary" href="/">Create a new secret</a>
 			{:else if status === 'error'}
 				<div class="alert alert-danger" role="alert">{error}</div>
 				<button class="btn btn-secondary" type="button" onclick={() => location.reload()}>
-					Réessayer
+					Retry
 				</button>
 			{:else if status === 'revealed'}
 				<div class="card card-glow">
 					<div class="card-body">
-						<label class="form-label" for="secret">Contenu</label>
+						<label class="form-label" for="secret">Content</label>
 						<textarea
 							id="secret"
 							class="form-control form-control-mono mb-3"
@@ -118,13 +118,13 @@
 						{/if}
 						<div class="d-flex flex-wrap gap-2">
 							<button class="btn btn-primary" type="button" onclick={copy}>
-								{copied ? 'Copié !' : 'Copier'}
+								{copied ? 'Copied!' : 'Copy'}
 							</button>
-							<a class="btn btn-outline-secondary" href="/">Créer un nouveau secret</a>
+							<a class="btn btn-outline-secondary" href="/">Create a new secret</a>
 						</div>
 					</div>
 					<div class="card-footer text-muted small">
-						Le secret a été détruit sur le serveur : copiez-le avant de quitter la page.
+						The secret is no longer stored server-side; copy it before leaving the page.
 					</div>
 				</div>
 			{:else}
@@ -132,7 +132,7 @@
 					<div class="card-body">
 						{#if needsPassword}
 							<div class="mb-3">
-								<label class="form-label" for="password">Mot de passe</label>
+								<label class="form-label" for="password">Password</label>
 								<div class="input-group">
 									<input
 										id="password"
@@ -149,18 +149,18 @@
 										type="button"
 										onclick={() => (showPassword = !showPassword)}
 									>
-										{showPassword ? 'Masquer' : 'Afficher'}
+										{showPassword ? 'Hide' : 'Show'}
 									</button>
 								</div>
 								{#if passwordError}
 									<div class="invalid-feedback">{passwordError}</div>
 								{:else}
-									<div class="form-text">Ce secret est protégé par un mot de passe.</div>
+									<div class="form-text">This secret is password-protected.</div>
 								{/if}
 							</div>
 						{:else}
 							<p>
-								En affichant ce secret, il sera <strong>définitivement supprimé</strong> du serveur.
+								Once displayed, this secret will be <strong>permanently deleted</strong> from the server.
 							</p>
 						{/if}
 
@@ -171,9 +171,9 @@
 						>
 							{#if status === 'revealing'}
 								<span class="spinner spinner-sm" aria-hidden="true"></span>
-								Déchiffrement…
+								Decrypting…
 							{:else}
-								Révéler le secret
+								Reveal
 							{/if}
 						</button>
 					</div>
