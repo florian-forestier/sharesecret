@@ -1,21 +1,21 @@
-/** SHA-256 hash of a string, hex-encoded (64 characters). */
-export async function sha256Hex(value: string): Promise<string> {
-	if (!globalThis.crypto?.subtle) {
-		throw new Error(
-			'Password hashing requires a secure context (HTTPS or localhost).'
-		);
-	}
-	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
-	return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+import { decryptSecret, deriveKeys, encryptSecret } from './crypto';
+
+export interface CreatedSecret {
+	/** Server-side identifier. */
+	hash: string;
+	/** Decryption key, to be put in the URL fragment (never sent to the server). */
+	key: string;
 }
 
 /**
- * Creates a secret server-side and returns its identifier (hash).
- * The optional password is SHA-256 hashed before being sent: it never travels in clear text.
+ * Encrypts the secret in the browser, then stores the ciphertext server-side.
+ * The server never sees the content, the key, or the password.
  */
-export async function createSecret(content: string, password?: string): Promise<string> {
-	const body: { content: string; password?: string } = { content };
-	if (password) body.password = await sha256Hex(password);
+export async function createSecret(content: string, password?: string): Promise<CreatedSecret> {
+	const { payload, key, verifier } = await encryptSecret(content, password || undefined);
+
+	const body: { content: string; password?: string } = { content: payload };
+	if (verifier) body.password = verifier;
 
 	const res = await fetch('/api/secret', {
 		method: 'POST',
@@ -29,7 +29,7 @@ export async function createSecret(content: string, password?: string): Promise<
 
 	const data: { hash?: string } = await res.json();
 	if (!data.hash) throw new Error('Invalid server response.');
-	return data.hash;
+	return { hash: data.hash, key };
 }
 
 /** Tells whether the secret requires a password. */
@@ -46,14 +46,22 @@ export async function isProtected(hash: string): Promise<boolean> {
 export class SecretNotFoundError extends Error {}
 
 /**
- * Reads a secret. Warning: reading it destroys it server-side.
- * The optional password is SHA-256 hashed before being sent.
+ * Reads and decrypts a secret. Warning: reading it destroys it server-side.
+ * `key` is the decoded URL fragment key.
  */
-export async function readSecret(hash: string, password?: string): Promise<string> {
-	const params = new URLSearchParams({ hash });
-	if (password) params.set('password', await sha256Hex(password));
+export async function readSecret(
+	hash: string,
+	key: Uint8Array<ArrayBuffer>,
+	password?: string
+): Promise<string> {
+	const { encryptionKey, verifier } = await deriveKeys(key, password || undefined);
 
-	const res = await fetch(`/api/secret?${params}`);
+	// POST so that the password verifier never ends up in a URL (proxy logs, history…).
+	const res = await fetch('/api/secret/read', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ hash, password: verifier })
+	});
 	if (res.status === 404) throw new SecretNotFoundError('Secret not found.');
 	if (!res.ok) {
 		throw new Error(`Unable to read the secret (HTTP ${res.status}).`);
@@ -61,10 +69,10 @@ export async function readSecret(hash: string, password?: string): Promise<strin
 
 	const data: { content?: string } = await res.json();
 	if (typeof data.content !== 'string') throw new Error('Invalid server response.');
-	return data.content;
+	return decryptSecret(data.content, encryptionKey);
 }
 
-/** Share link for a secret. */
-export function secretUrl(hash: string, origin = location.origin): string {
-	return `${origin}/secrets?hash=${encodeURIComponent(hash)}`;
+/** Share link for a secret. The key lives in the fragment, which browsers never send. */
+export function secretUrl({ hash, key }: CreatedSecret, origin = location.origin): string {
+	return `${origin}/secrets?hash=${encodeURIComponent(hash)}#${key}`;
 }

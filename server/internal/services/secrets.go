@@ -4,7 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -13,11 +13,11 @@ import (
 )
 
 func CreateSecret(secret structures.Secret) (string, error) {
-	salted := secret.Content + data.SK
-	hash := sha256.New()
-
-	hash.Write([]byte(salted))
-	d := hex.EncodeToString(hash.Sum(nil))
+	id := make([]byte, 16)
+	if _, err := rand.Read(id); err != nil {
+		return "", err
+	}
+	d := hex.EncodeToString(id)
 
 	if secret.Password != nil {
 		sk, err := crypt(*secret.Password)
@@ -33,15 +33,23 @@ func CreateSecret(secret structures.Secret) (string, error) {
 	}
 	secret.Content = content
 
+	data.Mu.Lock()
+	defer data.Mu.Unlock()
 	data.Secrets[d] = secret
 	return d, nil
 }
 
 func IsPasswordProtected(hash string) bool {
+	data.Mu.Lock()
+	defer data.Mu.Unlock()
 	return data.Secrets[hash].Password != nil
 }
 
 func GetSecret(hash string, password *string) (string, error) {
+	// Hold the lock for the whole check-then-delete, so a secret can only be read once.
+	data.Mu.Lock()
+	defer data.Mu.Unlock()
+
 	if sc, ok := data.Secrets[hash]; !ok {
 		return "", errors.New("not found")
 	} else {
@@ -49,7 +57,7 @@ func GetSecret(hash string, password *string) (string, error) {
 			if password == nil {
 				return "", errors.New("not found")
 			}
-			if pw, err := decrypt(*sc.Password); err != nil || pw != *password {
+			if pw, err := decrypt(*sc.Password); err != nil || subtle.ConstantTimeCompare([]byte(pw), []byte(*password)) != 1 {
 				return "", errors.New("not found")
 			}
 		}
@@ -57,13 +65,9 @@ func GetSecret(hash string, password *string) (string, error) {
 		if e != nil {
 			return "", e
 		}
-		DeleteSecret(hash)
+		delete(data.Secrets, hash)
 		return dc, nil
 	}
-}
-
-func DeleteSecret(hash string) {
-	delete(data.Secrets, hash)
 }
 
 func crypt(text string) (string, error) {

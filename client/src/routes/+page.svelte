@@ -22,8 +22,7 @@
 		loading = true;
 		error = null;
 		try {
-			const hash = await createSecret(content, usePassword ? password : undefined);
-			link = secretUrl(hash);
+			link = secretUrl(await createSecret(content, usePassword ? password : undefined));
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'An unexpected error occurred.';
 		} finally {
@@ -58,7 +57,8 @@
 		<div class="col-12 col-lg-8">
 			<h1 class="mb-2">Share a secret</h1>
 			<p class="lead mb-4">
-				The secret is encrypted server-side and destroyed as soon as it is read.
+				The secret is encrypted in your browser and destroyed as soon as it is read. The server
+				never sees its content.
 			</p>
 
 			{#if error}
@@ -141,7 +141,7 @@
 									</button>
 								</div>
 								<div class="form-text">
-									Password is hashed before being sent to the server.
+									The password is required to decrypt the secret and is never sent to the server.
 								</div>
 							</div>
 						{/if}
@@ -149,7 +149,7 @@
 						<button class="btn btn-primary btn-lg w-100" type="submit" disabled={!canSubmit}>
 							{#if loading}
 								<span class="spinner spinner-sm" aria-hidden="true"></span>
-								Creating…
+								Encrypting…
 							{:else}
 								Generate a link
 							{/if}

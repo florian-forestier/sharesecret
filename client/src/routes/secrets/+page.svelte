@@ -1,18 +1,20 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { isProtected, readSecret, SecretNotFoundError } from '#lib';
+	import { DecryptionError, isProtected, parseKey, readSecret, SecretNotFoundError } from '#lib';
 
 	type Status =
 		| 'checking' // /api/is-protected call in progress
 		| 'ready' // ready to reveal (with or without password)
-		| 'revealing' // /api/secret call in progress
+		| 'revealing' // /api/secret/read call + decryption in progress
 		| 'revealed'
 		| 'gone' // does not exist or already read
+		| 'nokey' // decryption key missing from the link
 		| 'error';
 
 	// The page is prerendered: the `hash` parameter is only readable in the browser.
 	let hash = '';
+	let key: Uint8Array<ArrayBuffer> | null = null;
 
 	let status = $state<Status>('checking');
 	let needsPassword = $state(false);
@@ -29,6 +31,13 @@
 			status = 'gone';
 			return;
 		}
+		// The key is in the fragment: check it before anything else, so that an incomplete
+		// link never burns the secret.
+		key = parseKey(location.hash.slice(1));
+		if (!key) {
+			status = 'nokey';
+			return;
+		}
 		try {
 			needsPassword = await isProtected(hash);
 			status = 'ready';
@@ -40,14 +49,16 @@
 
 	async function reveal(event: SubmitEvent) {
 		event.preventDefault();
-		if (status !== 'ready' || (needsPassword && !password)) return;
+		if (status !== 'ready' || !key || (needsPassword && !password)) return;
 
 		status = 'revealing';
 		passwordError = null;
 		try {
-			secret = await readSecret(hash, needsPassword ? password : undefined);
+			secret = await readSecret(hash, key, needsPassword ? password : undefined);
 			password = '';
 			status = 'revealed';
+			// The key is useless now, remove it from the address bar and history.
+			history.replaceState(history.state, '', location.pathname + location.search);
 		} catch (e) {
 			if (e instanceof SecretNotFoundError) {
 				if (needsPassword) {
@@ -57,6 +68,9 @@
 				} else {
 					status = 'gone';
 				}
+			} else if (e instanceof DecryptionError) {
+				error = `${e.message} The secret has been destroyed server-side and cannot be recovered.`;
+				status = 'error';
 			} else {
 				error = e instanceof Error ? e.message : 'An unexpected error occurred.';
 				status = 'error';
@@ -97,6 +111,14 @@
 					<p class="mb-0">This link is invalid, or the secret has already been read and destroyed.</p>
 				</div>
 				<a class="btn btn-primary" href="/">Create a new secret</a>
+			{:else if status === 'nokey'}
+				<div class="alert alert-warning" role="alert">
+					<h2 class="alert-heading h5">Incomplete link</h2>
+					<p class="mb-0">
+						The decryption key (the part after <code>#</code>) is missing or invalid. Make sure you
+						copied the whole link. The secret has not been read.
+					</p>
+				</div>
 			{:else if status === 'error'}
 				<div class="alert alert-danger" role="alert">{error}</div>
 				<button class="btn btn-secondary" type="button" onclick={() => location.reload()}>

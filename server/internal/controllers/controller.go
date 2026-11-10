@@ -2,32 +2,24 @@ package controllers
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"sharesecret/internal/services"
 	"sharesecret/internal/structures"
 )
 
+// GetSecret reads (and destroys) a secret. It is a POST so that the password verifier
+// travels in the body and never ends up in a URL (proxy logs, browser history…).
 func GetSecret(w http.ResponseWriter, r *http.Request) {
-	hash := r.URL.Query().Get("hash")
-	if hash == "" {
+	var req struct {
+		Hash     string  `json:"hash"`
+		Password *string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Hash == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	var password *string
-
-	pwd := r.URL.Query().Get("password")
-	if pwd != "" && len(pwd) != 64 {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	} else if pwd == "" {
-		password = nil
-	} else {
-		password = &pwd
-	}
-
-	secret, err := services.GetSecret(hash, password)
+	secret, err := services.GetSecret(req.Hash, req.Password)
 	if err != nil && err.Error() != "not found" {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -67,9 +59,11 @@ func IsPasswordProtected(w http.ResponseWriter, r *http.Request) {
 }
 
 func PostSecret(w http.ResponseWriter, r *http.Request) {
-	body, _ := io.ReadAll(r.Body)
 	var data structures.Secret
-	_ = json.Unmarshal(body, &data)
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil || data.Content == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	hash, err := services.CreateSecret(data)
 
@@ -84,8 +78,9 @@ func PostSecret(w http.ResponseWriter, r *http.Request) {
 		Hash: hash,
 	}
 
-	w.WriteHeader(http.StatusCreated)
+	// Headers must be set before WriteHeader, otherwise they are silently dropped.
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 	v, _ := json.Marshal(res)
 	_, _ = w.Write(v)
 }

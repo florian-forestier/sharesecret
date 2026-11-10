@@ -15,7 +15,7 @@ import (
 func main() {
 
 	r := chi.NewRouter()
-	r.Get("/api/secret", controllers.GetSecret)
+	r.Post("/api/secret/read", controllers.GetSecret)
 	r.Post("/api/secret", controllers.PostSecret)
 	r.Get("/api/is-protected", controllers.IsPasswordProtected)
 
